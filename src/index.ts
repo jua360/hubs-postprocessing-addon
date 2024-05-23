@@ -1,128 +1,129 @@
-import {
-  PixelationEffect,
-  SSAOEffect,
-  NormalPass,
-  EffectPass,
-  BlendFunction,
-  DepthDownsamplingPass,
-} from "postprocessing";
 import { ADDON_ID } from "./consts";
 import {
   App,
+  EnvironmentSettings,
   PREFERENCE_LIST_ITEM_TYPE,
-  PostProcessOrderE,
+  SceneLoader,
+  SystemOrderE,
+  anyEntityWith,
   getStore,
   registerAddon,
-  registerPass,
-  unregisterPass,
 } from "hubs";
+import { defineQuery, enterQuery, exitQuery } from "bitecs";
+import { PostProcessingEffects } from "./components";
+import {
+  POST_PROCESSING_FLAGS,
+  postProcessingEffectsInflator,
+} from "./post-processing";
+import {
+  disableOutline,
+  enableOutline,
+  outlineSystem,
+  outlinedInflator,
+} from "./outline";
+import { disableGodRays, enableGodRays, godRaysInflator } from "./god-rays";
+import { disablePixelation, enablePixelation } from "./pixelation";
+import { disableGlitch, enableGlitch } from "./glitch";
+import { disableSSAO, enableSSAO } from "./ssao";
 
-let pixelationPass: EffectPass | null = null;
-let pixelationEffect: PixelationEffect | null = null;
-function enablePixelation(app: App) {
-  if (!pixelationPass) {
-    pixelationEffect = new PixelationEffect(
-      app.store.state.preferences.fxPixelationLevel
-    );
-    pixelationPass = new EffectPass(app.scene.camera, pixelationEffect);
-    registerPass(app, pixelationPass, PostProcessOrderE.AfterBloom);
+function setupEffects(app: App) {
+  const store = getStore();
+  const envSettingsEid = anyEntityWith(app.world, EnvironmentSettings);
+  const envSettings = EnvironmentSettings.map.get(envSettingsEid);
+  const postProcessingEid = anyEntityWith(app.world, PostProcessingEffects);
+  if (
+    !envSettings?.enableHDRPipeline ||
+    !store.state.preferences.enablePostEffects ||
+    !postProcessingEid
+  ) {
+    disableAll(app);
+  } else {
+    const flags = PostProcessingEffects.flags[postProcessingEid];
+    if (flags & POST_PROCESSING_FLAGS.SSAO && store.state.preferences.fxSSAO) {
+      enableSSAO(app);
+    } else {
+      disableSSAO(app);
+    }
+    if (
+      flags & POST_PROCESSING_FLAGS.GOD_RAYS &&
+      store.state.preferences.fxGodRays
+    ) {
+      enableGodRays(app);
+    } else {
+      disableGodRays(app);
+    }
+    if (
+      flags & POST_PROCESSING_FLAGS.OUTLINE &&
+      store.state.preferences.fxOutline
+    ) {
+      enableOutline(app);
+    } else {
+      disableOutline(app);
+    }
+    if (
+      flags & POST_PROCESSING_FLAGS.PIXELATE &&
+      store.state.preferences.fxPixelation
+    ) {
+      enablePixelation(app);
+    } else {
+      disablePixelation(app);
+    }
+    if (
+      flags & POST_PROCESSING_FLAGS.GLITCH &&
+      store.state.preferences.fxGlitch
+    ) {
+      enableGlitch(app);
+    } else {
+      disableGlitch(app);
+    }
   }
 }
 
-function disablePixelation(app: App) {
-  if (pixelationPass) {
-    pixelationPass && unregisterPass(app, pixelationPass);
-    pixelationPass = null;
-    pixelationEffect = null;
-  }
-}
-
-let ssaoPass: EffectPass | null = null;
-let ssaoEffect: SSAOEffect | null = null;
-function enableSSAO(app: App) {
-  if (!ssaoPass) {
-    const normalPass = new NormalPass(app.scene, app.scene.camera);
-    const depthDownsamplingPass = new DepthDownsamplingPass({
-      normalBuffer: normalPass.texture,
-      resolutionScale: 0.5,
-    });
-    const capabilities = app.fx.composer?.getRenderer().capabilities!;
-    const normalDepthBuffer = capabilities.isWebGL2
-      ? depthDownsamplingPass.texture
-      : undefined;
-    ssaoEffect = new SSAOEffect(app.scene.camera, normalPass.texture, {
-      blendFunction: BlendFunction.MULTIPLY,
-      worldDistanceThreshold: 20,
-      worldDistanceFalloff: 5,
-      worldProximityThreshold: 0.4,
-      worldProximityFalloff: 0.1,
-      luminanceInfluence: 0.7,
-      samples: 16,
-      rings: 7,
-      radius: app.store.state.preferences.ssao_radius,
-      intensity: app.store.state.preferences.ssao_intensity,
-      bias: 0.025,
-      fade: 0.01,
-      resolutionScale: 0.5,
-      normalDepthBuffer,
-      distanceScaling: true,
-      depthAwareUpsampling: true,
-      distanceThreshold: 0.02, // Render up to a distance of ~20 world units
-      distanceFalloff: 0.0025, // with an additional ~2.5 units of falloff.
-      rangeThreshold: 0.0003, // Occlusion proximity of ~0.3 world units
-      rangeFalloff: 0.0001, // with ~0.1 units of falloff.
-      minRadiusScale: 0.33,
-    });
-    ssaoPass = new EffectPass(app.scene.camera, ssaoEffect);
-    registerPass(app, ssaoPass, PostProcessOrderE.AfterBloom);
-  }
-}
-
-function disableSSAO(app: App) {
-  if (ssaoPass) {
-    ssaoPass && unregisterPass(app, ssaoPass);
-    ssaoPass = null;
-    ssaoEffect = null;
-  }
+function disableAll(app: App) {
+  disableSSAO(app);
+  disableGodRays(app);
+  disableOutline(app);
+  disablePixelation(app);
+  disableGlitch(app);
 }
 
 function onReady(app: App, config?: JSON) {
   const store = getStore();
-  if (store.state.preferences.fxPixelation) {
-    enablePixelation(app);
-  }
-  if (store.state.preferences.fxSSAO) {
-    enableSSAO(app);
-  }
-  store.addEventListener("statechanged", () => {
-    if (store.state.preferences.fxPixelation) {
-      if (!pixelationPass) {
-        enablePixelation(app);
-      } else {
-        pixelationEffect &&
-          (pixelationEffect.granularity =
-            store.state.preferences.fxPixelationLevel);
-      }
-    } else {
-      disablePixelation(app);
-    }
-    if (store.state.preferences.fxSSAO) {
-      if (!ssaoPass) {
-        enableSSAO(app);
-      } else {
-        ssaoEffect &&
-          (ssaoEffect.radius = store.state.preferences.fxSSAORadius);
-      }
-    } else {
-      disableSSAO(app);
-    }
-  });
+  store.addEventListener("statechanged", () => setupEffects(app));
+}
+
+const sceneLoaderQuery = defineQuery([SceneLoader]);
+const sceneLoaderEnterQuery = enterQuery(sceneLoaderQuery);
+const sceneLoaderExitQuery = exitQuery(sceneLoaderQuery);
+function postProcessingEffectsSystem(app: App) {
+  sceneLoaderEnterQuery(app.world).forEach(() => disableAll(app));
+  sceneLoaderExitQuery(app.world).forEach(() => setupEffects(app));
 }
 
 registerAddon(ADDON_ID, {
   name: "Post-Processing",
   description: "This add-on adds ThreeJS post-processing effects to Hubs",
   onReady,
+  system: [
+    {
+      system: postProcessingEffectsSystem,
+      order: SystemOrderE.BeforeMatricesUpdate,
+    },
+    {
+      system: outlineSystem,
+      order: SystemOrderE.BeforeMatricesUpdate,
+    },
+  ],
+  inflator: [
+    {
+      gltf: {
+        id: "postProcessingEffects",
+        inflator: postProcessingEffectsInflator,
+      },
+    },
+    { gltf: { id: "godRays", inflator: godRaysInflator } },
+    { gltf: { id: "outlined", inflator: outlinedInflator } },
+  ],
   preference: [
     {
       fxPixelation: {
@@ -130,17 +131,7 @@ registerAddon(ADDON_ID, {
         prefConfig: {
           description: "Pixelation effect",
           prefType: PREFERENCE_LIST_ITEM_TYPE.CHECK_BOX,
-        },
-      },
-      fxPixelationLevel: {
-        prefDefinition: { type: "number", default: 8 },
-        prefConfig: {
-          description: "Pixelation level",
-          prefType: PREFERENCE_LIST_ITEM_TYPE.NUMBER_WITH_RANGE,
-          min: 0,
-          max: 32,
-          step: 2,
-          digits: 0,
+          disableIfFalse: "enablePostEffects",
         },
       },
       fxSSAO: {
@@ -148,28 +139,31 @@ registerAddon(ADDON_ID, {
         prefConfig: {
           description: "SSAO (Screen Space Ambient Occlusion)",
           prefType: PREFERENCE_LIST_ITEM_TYPE.CHECK_BOX,
+          disableIfFalse: "enablePostEffects",
         },
       },
-      fxSSAORadius: {
-        prefDefinition: { type: "number", default: 0.1 },
+      fxOutline: {
+        prefDefinition: { type: "bool", default: false },
         prefConfig: {
-          description: "Radius",
-          prefType: PREFERENCE_LIST_ITEM_TYPE.NUMBER_WITH_RANGE,
-          min: 0,
-          max: 4,
-          step: 0.1,
-          digits: 1,
+          description: "Outlined",
+          prefType: PREFERENCE_LIST_ITEM_TYPE.CHECK_BOX,
+          disableIfFalse: "enablePostEffects",
         },
       },
-      fxSSAOIntensity: {
-        prefDefinition: { type: "number", default: 1 },
+      fxGlitch: {
+        prefDefinition: { type: "bool", default: false },
         prefConfig: {
-          description: "Intensity",
-          prefType: PREFERENCE_LIST_ITEM_TYPE.NUMBER_WITH_RANGE,
-          min: 0,
-          max: 10,
-          step: 0.1,
-          digits: 1,
+          description: "Glitch",
+          prefType: PREFERENCE_LIST_ITEM_TYPE.CHECK_BOX,
+          disableIfFalse: "enablePostEffects",
+        },
+      },
+      fxGodRays: {
+        prefDefinition: { type: "bool", default: false },
+        prefConfig: {
+          description: "God Rays",
+          prefType: PREFERENCE_LIST_ITEM_TYPE.CHECK_BOX,
+          disableIfFalse: "enablePostEffects",
         },
       },
     },
