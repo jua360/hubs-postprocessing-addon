@@ -26,7 +26,7 @@
   "type": "module",
   "module": "dist/index.mjs",
   "devDependencies": {
-    "@types/hubs": "github:MozillaReality/hubs-ts-types#main",
+    "@types/hubs": "github:MozillaReality/hubs-ts-types#d9f56d541f3cf6b8fd360ae96652bf47941f8894",
     "@types/node": "^18.15.0",
     "@types/three": "^0.141.0",
     "ts-loader": "^9.5.1",
