@@ -1,6 +1,6 @@
 {
   "name": "hubs-postprocessing-addon",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "This add-on adds post-processing effects to Hubs",
   "scripts": {
     "build": "webpack --mode=production",
@@ -37,6 +37,6 @@
   "peerDependencies": {
     "bitecs": "github:mozilla/bitECS#hubs-patches",
     "postprocessing": "~6.28.7",
-    "three": "github:MozillaReality/three.js#65b5105908f5f135cad25fed07e25f15f3876777"
+    "three": "github:mozillareality/three.js#65b5105908f5f135cad25fed07e25f15f3876777"
   }
 }
