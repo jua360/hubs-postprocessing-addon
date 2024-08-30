@@ -1,7 +1,7 @@
 # Hubs Post-Processing Add-On
 This add-on adds ThreeJs [post-processing](https://github.com/pmndrs/postprocessing) effects to Hubs.
 
-As of now add-ons are not yet part of the main Hubs branch, so you'll need to use the Hubs client [add-ons branch](https://github.com/mozilla/hubs/tree/addons) and install this add-on on it.
+As of now add-ons are not yet part of the main Hubs branch, so you'll need to use the Hubs client [add-ons branch](https://github.com/Hubs-Foundation/hubs/tree/addons) and install this add-on on it.
 
 https://github.com/MozillaReality/hubs-postprocessing-addon/assets/837184/6c06f912-1be9-4d14-8e0a-67816257c993
 
